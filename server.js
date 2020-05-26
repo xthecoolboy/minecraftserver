@@ -69,6 +69,20 @@ const socketIoHandler = () => {
           console.log("Backup Complete");
         });
     });
+    socket.on("BackupServer", async (data) => {
+      console.log("Backing up server");
+      var zip = new Zip();
+      zip.addLocalFolder(path.join(__dirname, "server_data"));
+      dbx
+        .filesUpload({
+          path: "/world.zip",
+          contents: zip.toBuffer(),
+          mode: { ".tag": "overwrite" },
+        })
+        .then((res) => {
+          console.log("Backup Complete");
+        });
+    });
     socket.on("OpPlayer", (data) => {
       console.log("Opping Player");
       child.stdin.write(`op ${data.name}\n`);

@@ -18,6 +18,9 @@ q(".make-op-button").addEventListener("click",()=>{
 q(".save-server").addEventListener("click",()=>{
     socket.emit('SaveServer',{});
 })
+q(".backup-server").addEventListener("click",()=>{
+    socket.emit('´BackupServer',{});
+})
 q(".command-button").addEventListener("click",()=>{
     socket.emit('CommandIssued',{command: q(".command").value});
 })
