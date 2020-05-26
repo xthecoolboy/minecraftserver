@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SERVER</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <input type="file" name="" id="" /> JAR FILE
+    <h2 class="start-server" style="cursor: pointer;">Start Server</h2>
+    <h2 class="stop-server" style="cursor: pointer;">Stop Server</h2>
+    <h2 class="save-server" style="cursor: pointer;">Save Server</h2>
+    <input type="text" class="make-op" placeholder="Player Username" />
+    <button class="make-op-button">MAKE PLAYER OP</button>
+    <input type="text" class="command" placeholder="Issue a command" />
+    <button class="command-button">Send command</button>
+
+    <div class="server-properties-container">
+      <label for="MOTD">MOTD</label>
+
+      <input type="text" class="server-properties" id="MOTD" name="MOTD" />
+      <label for="Max">Max Players</label>
+
+      <input
+        type="number"
+        class="server-properties"
+        id="Max"
+        name="Max"
+        placeholder="Max Players"
+      />
+      <label for="difficulty">Difficulty</label>
+
+      <select class="server-properties" name="difficulty" id="difficulty">
+        <option value="peaceful">Peaceful</option>
+        <option value="easy">Easy</option>
+        <option value="normal">Normal</option>
+        <option value="hard">Hard</option>
+      </select>
+    </div>
+    <script src="./socket.io.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
