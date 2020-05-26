@@ -1,5 +1,11 @@
 const socket = io();
 
+
+
+socket.on('serverip',(data)=>{
+    q('.server-ip').innerHTML = data;
+})
+
 q(".start-server").addEventListener("click",()=>{
         socket.emit('StartServer',{});
 })

@@ -32,6 +32,7 @@ const socketIoHandler = () => {
         authtoken: "1cSMJNUrNTcgwynxtmpK3b3XNAu_7RAw7CfnKCSN7ZsEoVK8N",
         addr: 25565,
       });
+      socket.emit('serverip',url);
       console.log(url);
       console.log("Initialazing");
       dbx.filesDownload({ path: "/mcserver.jar" }).then((serverJar) => {
