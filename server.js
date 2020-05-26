@@ -17,8 +17,8 @@ var dbx = new Dropbox({
 var child;
 const PORT = process.env.PORT || "5000";
 const dir = path.join(__dirname, "server.jar");
-if (!fs.existsSync("./server_data")) {
-  fs.mkdirSync("server_data");
+if (!fs.existsSync(path.join(__dirname,"server_data"))) {
+  fs.mkdirSync(path.join(__dirname,"server_data"));
 }
 console.log("NAME OF DIR : ", dir);
 app.use(express.static(path.join(__dirname, "public")));
@@ -28,7 +28,7 @@ const socketIoHandler = () => {
     socket.on("StartServer", (data) => {
       console.log("Initialazing");
       dbx.filesDownload({ path: "/mcserver.jar" }).then((serverJar) => {
-        fs.writeFile("/", serverJar.fileBinary, () => {
+        fs.writeFile(path.join(__dirname,"mcserver.jar"), serverJar.fileBinary, () => {
           dbx
             .filesDownload({ path: "/world.zip" })
             .then((worldFile) => {
@@ -65,7 +65,7 @@ const socketIoHandler = () => {
       console.log("Stopping server");
       child.stdin.write("stop\n");
       var zip = new Zip();
-      zip.addLocalFolder("./server_data/");
+      zip.addLocalFolder(path.join(__dirname,"server_data"));
       console.log("Making Backup");
       dbx
         .filesUpload({
@@ -96,7 +96,7 @@ const ExtractZipFile = (zipBinary) => {
   console.log("Found Backup");
   var zip = new Zip(zipBinary.fileBinary);
   console.log("Extracting world");
-  zip.extractAllToAsync("./server_data", true, (err) => {
+  zip.extractAllToAsync(path.join(__dirname,"server_data"), true, (err) => {
     ExecuteServerJar();
   });
 };
@@ -109,7 +109,7 @@ const ExecuteServerJar = () => {
       path.join(__dirname, "mcserver.jar") +
       " nogui",
     {
-      cwd: "./server_data/",
+      cwd: path.join(__dirname,"server_data"),
     }
   );
   child.stdout.on("data", (data) => {
@@ -120,7 +120,7 @@ const ExecuteServerJar = () => {
   });
 };
 const createServerConfig = () => {
-  fs.writeFile("./server_data/eula.txt", "eula=true", () => {});
+  fs.writeFile(path.join(__dirname,"server_data"), "eula=true", () => {});
   //fs.writeFile("./server_data/server.properties", "");
 };
 socketIoHandler();
