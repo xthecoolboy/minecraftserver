@@ -105,7 +105,7 @@ const ExecuteServerJar = () => {
   createServerConfig();
   console.log("Starting Server");
   child = exec(
-    "javaw -Xms512M -Xmx512M -jar " +
+    "java -Xms512M -Xmx512M -jar " +
       path.join(__dirname, "mcserver.jar") +
       " nogui",
     {
