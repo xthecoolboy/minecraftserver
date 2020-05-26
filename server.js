@@ -15,7 +15,7 @@ var dbx = new Dropbox({
     "tGNdy6kRMnAAAAAAAAAALDeEkLl4GymkETKTwgLUE3tIkCqK7OQij4TymHs9oRrp",
 });
 var child;
-const PORT = "5000";
+const PORT = process.env.PORT || "5000";
 const dir = path.join(__dirname, "server.jar");
 if (!fs.existsSync("./server_data")) {
   fs.mkdirSync("server_data");
