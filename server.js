@@ -183,6 +183,9 @@ const ExecuteServerJar = () => {
 };
 const createServerConfig = () => {
   fs.writeFile(path.join(__dirname, "server_data"), "eula=true", (err) => {});
+  dbx.filesDownload({path:'/server.properties',}).then(data =>{
+    fs.writeFile(path.join(__dirname, "server_data","server.properties"),data.fileBinary,()=>{})
+  })
 };
 socketIoHandler();
 
