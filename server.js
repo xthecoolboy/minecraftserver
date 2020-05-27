@@ -18,6 +18,8 @@ var dbx = new Dropbox({
 var child;
 const PORT = process.env.PORT || "5000";
 const dir = path.join(__dirname, "server.jar");
+var url;
+var isTheServerOn = false;
 if (!fs.existsSync(path.join(__dirname, "server_data"))) {
   fs.mkdirSync(path.join(__dirname, "server_data"));
 }
@@ -26,48 +28,101 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const socketIoHandler = () => {
   io.on("connection", (socket) => {
-    socket.on("StartServer", async (data) => {
-      const url = await ngrok.connect({
-        proto: "tcp",
-        authtoken: "1cSMJNUrNTcgwynxtmpK3b3XNAu_7RAw7CfnKCSN7ZsEoVK8N",
-        addr: 25565,
-      });
-      socket.emit('serverip',url);
-      console.log(url);
-      console.log("Initialazing");
-      dbx.filesDownload({ path: "/mcserver.jar" }).then((serverJar) => {
-        fs.writeFile(
-          path.join(__dirname, "mcserver.jar"),
-          serverJar.fileBinary,
-          () => {
-            dbx
-              .filesDownload({ path: "/world.zip" })
-              .then((worldFile) => {
-                ExtractZipFile(worldFile);
-              })
-              .catch((err) => {
-                console.log("No backup found, creating new world");
-                ExecuteServerJar();
+    dbx.filesDownload({ path: "/server.properties" }).then((properties) => {
+      fs.writeFile(
+        path.join(__dirname, "server_data", "server.properties"),
+        properties.fileBinary,
+        (err) => {
+          fs.readFile(
+            path.join(__dirname, "server_data", "server.properties"),
+            "utf8",
+            (err, data) => {
+              let listOfProperties = [];
+              let a = data.split("\n");
+              a.forEach((res) => {
+                let b = res.split("=");
+                listOfProperties.push({ property: b[0], value: b[1] });
               });
+              console.log(listOfProperties);
+              socket.emit("downloaded-properties", listOfProperties);
+            }
+          );
+        }
+      );
+    });
+    socket.emit("serverip", url);
+    socket.on("NewProperties", (data) => {
+      let string = "";
+      Promise.all(
+        data.map((property) => {
+          string += `${property.name}=${property.value}\n`;
+        })
+      ).then((res) => {
+        fs.writeFile(
+          path.join(__dirname, "server.properties"),
+          string,
+          (err) => {
+            fs.readFile(path.join(__dirname, "server.properties"),'utf8',(err,res)=>{
+              dbx.filesUpload({
+                path: "/server.properties",
+                contents: res,
+                mode: { ".tag": "overwrite" },
+              }).then(res => {console.log("updated properties")});
+            })
+            
           }
         );
       });
     });
-    socket.on("StopServer", async (data) => {
-      console.log("Stopping server");
-      child.stdin.write("stop\n");
-      var zip = new Zip();
-      zip.addLocalFolder(path.join(__dirname, "server_data"));
-      console.log("Making Backup");
-      dbx
-        .filesUpload({
-          path: "/world.zip",
-          contents: zip.toBuffer(),
-          mode: { ".tag": "overwrite" },
-        })
-        .then((res) => {
-          console.log("Backup Complete");
+    socket.on("StartServer", async (data) => {
+      if (!isTheServerOn) {
+        url = await ngrok.connect({
+          proto: "tcp",
+          authtoken: "1cSMJNUrNTcgwynxtmpK3b3XNAu_7RAw7CfnKCSN7ZsEoVK8N",
+          addr: 25565,
         });
+        socket.emit("serverip", url);
+        console.log(url);
+        console.log("Initialazing");
+        dbx.filesDownload({ path: "/mcserver.jar" }).then((serverJar) => {
+          fs.writeFile(
+            path.join(__dirname, "mcserver.jar"),
+            serverJar.fileBinary,
+            () => {
+              dbx
+                .filesDownload({ path: "/world.zip" })
+                .then((worldFile) => {
+                  ExtractZipFile(worldFile);
+                })
+                .catch((err) => {
+                  console.log("No backup found, creating new world");
+                  ExecuteServerJar();
+                });
+            }
+          );
+        });
+      }
+    });
+    socket.on("StopServer", async (data) => {
+      if (isTheServerOn) {
+        console.log("Stopping server");
+        child.stdin.write("stop\n");
+        var zip = new Zip();
+        zip.addLocalFolder(path.join(__dirname, "server_data"));
+        console.log("Making Backup");
+        dbx
+          .filesUpload({
+            path: "/world.zip",
+            contents: zip.toBuffer(),
+            mode: { ".tag": "overwrite" },
+          })
+          .then((res) => {
+            console.log("Backup Complete");
+            isTheServerOn = false;
+          });
+      } else {
+        console.log("Server hasn't started");
+      }
     });
     socket.on("BackupServer", async (data) => {
       console.log("Backing up server");
@@ -109,6 +164,7 @@ const ExtractZipFile = (zipBinary) => {
 
 const ExecuteServerJar = () => {
   createServerConfig();
+  isTheServerOn = true;
   console.log("Starting Server");
   child = exec(
     "java -Xms512M -Xmx512M -jar " +
@@ -126,8 +182,7 @@ const ExecuteServerJar = () => {
   });
 };
 const createServerConfig = () => {
-  fs.writeFile(path.join(__dirname, "server_data"), "eula=true", () => {});
-  //fs.writeFile("./server_data/server.properties", "");
+  fs.writeFile(path.join(__dirname, "server_data"), "eula=true", (err) => {});
 };
 socketIoHandler();
 
