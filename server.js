@@ -7,9 +7,11 @@ const fs = require("fs");
 const cp = require("child_process");
 const fetch = require("isomorphic-fetch");
 const ngrok = require("ngrok");
+const cron = require("node-cron");
 const Zip = require("adm-zip");
 const exec = cp.exec;
 var Dropbox = require("dropbox").Dropbox;
+const axios = require("axios");
 var dbx = new Dropbox({
   fetch: fetch,
   accessToken:
@@ -112,9 +114,19 @@ const socketIoHandler = () => {
     });
     socket.on("StopServer", async (data) => {
       if (isTheServerOn) {
+        await backupServer();
+        isTheServerOn = false;
+        console.log("Stopping server");
+        child.stdin.write("stop\n");
+      } else {
+        console.log("Server hasn't started");
+      }
+    });
+    socket.on("BackupServer", async (data) => {
+      if (isTheServerOn) {
+        console.log("Backing up server");
         var zip = new Zip();
         zip.addLocalFolder(path.join(__dirname, "server_data"));
-        console.log("Making Backup");
         dbx
           .filesUpload({
             path: "/world.zip",
@@ -123,27 +135,10 @@ const socketIoHandler = () => {
           })
           .then((res) => {
             console.log("Backup Complete");
-            isTheServerOn = false;
-            console.log("Stopping server");
-            child.stdin.write("stop\n");
           });
       } else {
-        console.log("Server hasn't started");
+        console.log("server has to be online to backup");
       }
-    });
-    socket.on("BackupServer", async (data) => {
-      console.log("Backing up server");
-      var zip = new Zip();
-      zip.addLocalFolder(path.join(__dirname, "server_data"));
-      dbx
-        .filesUpload({
-          path: "/world.zip",
-          contents: zip.toBuffer(),
-          mode: { ".tag": "overwrite" },
-        })
-        .then((res) => {
-          console.log("Backup Complete");
-        });
     });
     socket.on("OpPlayer", (data) => {
       console.log("Opping Player");
@@ -171,6 +166,12 @@ const ExtractZipFile = (zipBinary) => {
 
 const ExecuteServerJar = () => {
   createServerConfig();
+  cron.schedule("*/5 * * * *", () => {
+    backupServer();
+    axios.get("https://mcserverdmj.herokuapp.com/").then((res) => {
+      console.log("Pinging each 5 minutes");
+    });
+  });
   isTheServerOn = true;
   console.log("Starting Server");
   child = exec(
@@ -187,6 +188,26 @@ const ExecuteServerJar = () => {
   child.stderr.on("data", (data) => {
     console.log(data);
   });
+};
+const backupServer = async () => {
+  SaveServer();
+  setTimeout(() => {
+    var zip = new Zip();
+    zip.addLocalFolder(path.join(__dirname, "server_data"));
+    dbx
+      .filesUpload({
+        path: "/world.zip",
+        contents: zip.toBuffer(),
+        mode: { ".tag": "overwrite" },
+      })
+      .then((res) => {
+        console.log("Backup Complete");
+      });
+  }, 3000);
+};
+const SaveServer = () => {
+  console.log("Saving server");
+  child.stdin.write("save-all\n");
 };
 const createServerConfig = () => {
   fs.writeFile(path.join(__dirname, "server_data"), "eula=true", (err) => {});
