@@ -192,6 +192,7 @@ const ExecuteServerJar = () => {
 const backupServer = async () => {
   SaveServer();
   setTimeout(() => {
+    console.log("Beginning server backup ");
     var zip = new Zip();
     zip.addLocalFolder(path.join(__dirname, "server_data"));
     dbx
