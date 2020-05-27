@@ -62,14 +62,21 @@ const socketIoHandler = () => {
           path.join(__dirname, "server.properties"),
           string,
           (err) => {
-            fs.readFile(path.join(__dirname, "server.properties"),'utf8',(err,res)=>{
-              dbx.filesUpload({
-                path: "/server.properties",
-                contents: res,
-                mode: { ".tag": "overwrite" },
-              }).then(res => {console.log("updated properties")});
-            })
-            
+            fs.readFile(
+              path.join(__dirname, "server.properties"),
+              "utf8",
+              (err, res) => {
+                dbx
+                  .filesUpload({
+                    path: "/server.properties",
+                    contents: res,
+                    mode: { ".tag": "overwrite" },
+                  })
+                  .then((res) => {
+                    console.log("updated properties");
+                  });
+              }
+            );
           }
         );
       });
@@ -105,8 +112,6 @@ const socketIoHandler = () => {
     });
     socket.on("StopServer", async (data) => {
       if (isTheServerOn) {
-        console.log("Stopping server");
-        child.stdin.write("stop\n");
         var zip = new Zip();
         zip.addLocalFolder(path.join(__dirname, "server_data"));
         console.log("Making Backup");
@@ -119,6 +124,8 @@ const socketIoHandler = () => {
           .then((res) => {
             console.log("Backup Complete");
             isTheServerOn = false;
+            console.log("Stopping server");
+            child.stdin.write("stop\n");
           });
       } else {
         console.log("Server hasn't started");
@@ -183,9 +190,13 @@ const ExecuteServerJar = () => {
 };
 const createServerConfig = () => {
   fs.writeFile(path.join(__dirname, "server_data"), "eula=true", (err) => {});
-  dbx.filesDownload({path:'/server.properties',}).then(data =>{
-    fs.writeFile(path.join(__dirname, "server_data","server.properties"),data.fileBinary,()=>{})
-  })
+  dbx.filesDownload({ path: "/server.properties" }).then((data) => {
+    fs.writeFile(
+      path.join(__dirname, "server_data", "server.properties"),
+      data.fileBinary,
+      () => {}
+    );
+  });
 };
 socketIoHandler();
 
