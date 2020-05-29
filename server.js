@@ -206,6 +206,7 @@ const DownloadMinecraftJar = (linkToVersion) => {
     request = https.get(linkToVersion, (res) => {
       res.pipe(stream);
       stream.on("finish", () => {
+        //Closing stream
         stream.close();
         resolve();
       });
