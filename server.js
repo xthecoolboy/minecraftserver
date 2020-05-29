@@ -78,14 +78,15 @@ const socketIoHandler = () => {
         state.ChangeState(state.GetStates().starting);
         socket.emit("serverStatus", state.CurrentState());
         console.log(state.CurrentState());
-        Promise.all([
-          DownloadMinecraftJar(data.link),
-          DownloadMinecraftWorld().catch((err) => {
-            console.log("World not found creating a new one");
-            StartServer(socket);
-          }),
-        ]).then(async () => {
-          StartServer(socket);
+        DownloadMinecraftJar(data.link).then((res) => {
+          DownloadMinecraftWorld()
+            .then(async () => {
+              StartServer(socket);
+            })
+            .catch((err) => {
+              console.log("World not found creating a new one");
+              StartServer(socket);
+            });
         });
       } else {
         console.log("The server is already online or is starting");
@@ -161,7 +162,7 @@ const StartServer = async (socket) => {
 const StopServer = async () => {
   if (state.CurrentState() === state.GetStates().started) {
     state.ChangeState(state.GetStates().stopped);
-    job.stop()
+    job.stop();
     socket.emit("serverStatus", state.CurrentState());
     console.log("Stopping server");
     await BackupServer();
