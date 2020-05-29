@@ -5,6 +5,7 @@ const fs = require("fs");
 const cp = require("child_process");
 
 //SERVER SIDE
+const https = require("https");
 const express = require("express");
 const app = express();
 const server = require("http").Server(app);
@@ -78,16 +79,20 @@ const socketIoHandler = () => {
         state.ChangeState(state.GetStates().starting);
         socket.emit("serverStatus", state.CurrentState());
         console.log(state.CurrentState());
-        DownloadMinecraftJar(data.link).then((res) => {
-          DownloadMinecraftWorld()
-            .then(async () => {
-              StartServer(socket);
-            })
-            .catch((err) => {
-              console.log("World not found creating a new one");
-              StartServer(socket);
-            });
-        });
+        console.log(data.link);
+        DownloadMinecraftJar(data.link)
+          .then((res) => {
+            console.log("Finished");
+            DownloadMinecraftWorld()
+              .then(async () => {
+                StartServer(socket);
+              })
+              .catch((err) => {
+                console.log("World not found creating a new one");
+                StartServer(socket);
+              });
+          })
+          .catch((err) => console.log(err));
       } else {
         console.log("The server is already online or is starting");
       }
@@ -198,13 +203,13 @@ const BackupServer = async () => {
 const DownloadMinecraftJar = (linkToVersion) => {
   return new Promise((resolve, reject) => {
     let stream = fs.createWriteStream("mcserver.jar");
-    axios
-      .get(linkToVersion)
-      .then((res) => {
-        res.pipe(stream);
+    request = https.get(linkToVersion, (res) => {
+      res.pipe(stream);
+      stream.on("finish", () => {
+        stream.close();
         resolve();
-      })
-      .catch((err) => reject());
+      });
+    });
   });
 };
 const DownloadMinecraftWorld = () => {
