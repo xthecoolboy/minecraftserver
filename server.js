@@ -196,7 +196,7 @@ const BackupServer = async () => {
 
 const DownloadMinecraftJar = (linkToVersion) => {
   return new Promise((resolve, reject) => {
-    let stream = fs.createWriteStream("server.jar");
+    let stream = fs.createWriteStream("mcserver.jar");
     axios
       .get(linkToVersion)
       .then((res) => {
