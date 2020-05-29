@@ -17,7 +17,7 @@ const fetch = require("isomorphic-fetch");
 //END DROPBOX
 
 //KEEPING ALIVE SERVER AND BACKUPS
-const cron = require("node-cron");
+const Cron = require("cron").CronJob;
 const axios = require("axios");
 //END KEEPING ALIVE SERVER
 //ZIPPING FILES
@@ -39,6 +39,12 @@ const ngrok = new Ngrok(
 const state = State();
 //Initialize express
 const exec = cp.exec;
+//Initialize Cronjob
+var job = new Cron({
+  cronTime: "*/5 * * * *",
+  onTick: AutoBackups().Start(),
+  start: false,
+});
 
 var dbx = new Dropbox({
   fetch: fetch,
@@ -69,7 +75,10 @@ const socketIoHandler = () => {
         console.log(state.CurrentState());
         Promise.all([
           DownloadMinecraftJar(data.link),
-          DownloadMinecraftWorld().catch((err) => {console.log("World not found creating a new one"); StartServer(socket)}),
+          DownloadMinecraftWorld().catch((err) => {
+            console.log("World not found creating a new one");
+            StartServer(socket);
+          }),
         ]).then(async () => {
           StartServer(socket);
         });
@@ -204,14 +213,11 @@ const DownloadMinecraftWorld = () => {
   });
 };
 const AutoBackups = () => {
-  let job;
   return {
     Start: () => {
-      job = cron.schedule("*/5 * * * *", () => {
-        BackupServer();
-        axios.get("https://mcserverdmj.herokuapp.com/").then((res) => {
-          console.log("Pinging each 5 minutes");
-        });
+      BackupServer();
+      axios.get("https://mcserverdmj.herokuapp.com/").then((res) => {
+        console.log("Pinging each 5 minutes");
       });
     },
     Stop: () => {
