@@ -42,7 +42,12 @@ const exec = cp.exec;
 //Initialize Cronjob
 var job = new Cron({
   cronTime: "*/5 * * * *",
-  onTick: AutoBackups().Start(),
+  onTick: () => {
+    BackupServer();
+    axios.get("https://mcserverdmj.herokuapp.com/").then((res) => {
+      console.log("Pinging each 5 minutes");
+    });
+  },
   start: false,
 });
 
@@ -120,7 +125,7 @@ const socketIoHandler = () => {
   });
 };
 
-const ExecuteServerJar = async (AutoBackups, socket) => {
+const ExecuteServerJar = async (socket) => {
   await createServerConfig();
   console.log("Starting Server");
   child = exec(
@@ -135,13 +140,13 @@ const ExecuteServerJar = async (AutoBackups, socket) => {
     if (data.indexOf("Done") !== -1) {
       console.log("Server has started, now joinable");
       state.ChangeState(state.GetStates().started);
-      AutoBackups.Start();
+      job.start();
       socket.emit("serverStatus", state.CurrentState());
     }
     console.log(data);
   });
   child.stderr.on("data", (data) => {
-    AutoBackups.Stop();
+    job.stop();
     console.log(data);
   });
 };
@@ -151,12 +156,12 @@ const StartServer = async (socket) => {
   url = ngrok.GetUrl();
   console.log(ngrok.GetUrl());
   socket.emit("serverIp", url);
-  ExecuteServerJar(AutoBackups(), socket);
+  ExecuteServerJar(socket);
 };
 const StopServer = async () => {
   if (state.CurrentState() === state.GetStates().started) {
     state.ChangeState(state.GetStates().stopped);
-    AutoBackups.Stop();
+    job.stop()
     socket.emit("serverStatus", state.CurrentState());
     console.log("Stopping server");
     await BackupServer();
@@ -212,19 +217,7 @@ const DownloadMinecraftWorld = () => {
     );
   });
 };
-const AutoBackups = () => {
-  return {
-    Start: () => {
-      BackupServer();
-      axios.get("https://mcserverdmj.herokuapp.com/").then((res) => {
-        console.log("Pinging each 5 minutes");
-      });
-    },
-    Stop: () => {
-      job.stop();
-    },
-  };
-};
+
 const SaveServer = () => {
   console.log("Saving server");
   child.stdin.write("save-all\n");
