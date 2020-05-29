@@ -7,9 +7,17 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <h1 class="server-status">SERVER STATUS: </h1>
+    <h1 class="server-ip">SERVER IP</h1>
 
-    <h1 class = 'server-ip'> SERVER IP</h1>
     <input type="file" name="" id="" /> JAR FILE
+    <label for="version">Version</label>
+    <select name="version" id="version" class="version">
+      <option
+        data-url="https://launcher.mojang.com/v1/objects/bb2b6b1aefcd70dfd1892149ac3a215f6c636b07/server.jar"
+      >1.15.2</option>
+      <option data-url="https://launcher.mojang.com/v1/objects/03b8fa357937d0bdb6650ec8cc74506ec2fd91a7/server.jar">Snapshot 20w21a</option>
+    </select>
     <h2 class="start-server" style="cursor: pointer;">Start Server</h2>
     <h2 class="stop-server" style="cursor: pointer;">Stop Server</h2>
     <h2 class="backup-server" style="cursor: pointer;">Backup Server</h2>
@@ -18,10 +26,9 @@
     <button class="make-op-button">MAKE PLAYER OP</button>
     <input type="text" class="command" placeholder="Issue a command" />
     <button class="command-button">Send command</button>
-    <button class = 'properties-server'>Guardar</button>
+    <button class="properties-server">Guardar</button>
 
     <div class="server-properties-container">
-
       <label for="MOTD">MOTD</label>
 
       <input type="text" class="server-properties" id="MOTD" name="MOTD" />

@@ -1,7 +1,10 @@
 const socket = io();
 
-socket.on("serverip", (data) => {
-  q(".server-ip").innerHTML = data;
+socket.on("serverIp", (data) => {
+  q(".server-ip").innerHTML = "Server ip is :" + data !== null ? data :'';
+});
+socket.on("serverStatus", (data) => {
+  q(".server-status").innerHTML = "Server is currently " + data;
 });
 
 q(".properties-server").addEventListener("click", () => {
@@ -15,11 +18,13 @@ q(".properties-server").addEventListener("click", () => {
     { name: "online-mode", value: q("#ONLINE-MODE").value },
     { name: "white-list", value: q("#WHITELIST").value },
     { name: "enable-command-block", value: q("#COMMAND-BLOCKS").value },
+    { name: "broadcast-console-to-ops", value: q("BROADCAST-CONSOLE-TO-OPS").value },
+
   ]);
 });
 
 q(".start-server").addEventListener("click", () => {
-  socket.emit("StartServer", {});
+  socket.emit("StartServer", {link:q('#version').selectedOptions[0].getAttribute('data-url')});
 });
 q(".stop-server").addEventListener("click", () => {
   socket.emit("StopServer", {});
@@ -45,6 +50,7 @@ const serverProperties = [
   "ONLINE-MODE",
   "WHITELIST",
   "COMMAND-BLOCKS",
+  "BROADCAST-CONSOLE-TO-OPS",
 ];
 serverProperties.forEach((curr) => {
   console.log("yes");
@@ -104,6 +110,9 @@ socket.on("downloaded-properties", (data) => {
         break;
       case "enable-command-block":
         q("#COMMAND-BLOCKS").value = property.value;
+        break;
+      case "broadcast-console-to-ops":
+        q("#BROADCAST-CONSOLE-TO-OPS").value = property.value;
         break;
       default:
         break;

@@ -1,17 +1,45 @@
+//NODE NATIVE MODULES
+
+const path = require("path");
+const fs = require("fs");
+const cp = require("child_process");
+
+//SERVER SIDE
 const express = require("express");
 const app = express();
 const server = require("http").Server(app);
 const io = require("socket.io")(server);
-const path = require("path");
-const fs = require("fs");
-const cp = require("child_process");
-const fetch = require("isomorphic-fetch");
-const ngrok = require("ngrok");
-const cron = require("node-cron");
-const Zip = require("adm-zip");
-const exec = cp.exec;
+//SERVER SIDE
+
+//DROPBOX
 var Dropbox = require("dropbox").Dropbox;
+const fetch = require("isomorphic-fetch");
+//END DROPBOX
+
+//KEEPING ALIVE SERVER AND BACKUPS
+const cron = require("node-cron");
 const axios = require("axios");
+//END KEEPING ALIVE SERVER
+//ZIPPING FILES
+const Zip = require("adm-zip");
+//END ZIPPING FILES
+//END NPM INSTALLED MODULES
+
+//MY MANAGERS IMPORTS
+const Ngrok = require("./ngrokManager");
+const State = require("./ServerStateManager");
+
+//Initialize ngrok
+const ngrok = new Ngrok(
+  "tcp",
+  "1cSMJNUrNTcgwynxtmpK3b3XNAu_7RAw7CfnKCSN7ZsEoVK8N",
+  "25565"
+);
+//Initialize state manager
+const state = State();
+//Initialize express
+const exec = cp.exec;
+
 var dbx = new Dropbox({
   fetch: fetch,
   accessToken:
@@ -19,160 +47,72 @@ var dbx = new Dropbox({
 });
 var child;
 const PORT = process.env.PORT || "5000";
-const dir = path.join(__dirname, "server.jar");
 var url;
-var isTheServerOn = false;
 if (!fs.existsSync(path.join(__dirname, "server_data"))) {
   fs.mkdirSync(path.join(__dirname, "server_data"));
 }
-console.log("NAME OF DIR : ", dir);
+
 app.use(express.static(path.join(__dirname, "public")));
 
 const socketIoHandler = () => {
   io.on("connection", (socket) => {
-    dbx.filesDownload({ path: "/server.properties" }).then((properties) => {
-      fs.writeFile(
-        path.join(__dirname, "server_data", "server.properties"),
-        properties.fileBinary,
-        (err) => {
-          fs.readFile(
-            path.join(__dirname, "server_data", "server.properties"),
-            "utf8",
-            (err, data) => {
-              let listOfProperties = [];
-              let a = data.split("\n");
-              a.forEach((res) => {
-                let b = res.split("=");
-                listOfProperties.push({ property: b[0], value: b[1] });
-              });
-              console.log(listOfProperties);
-              socket.emit("downloaded-properties", listOfProperties);
-            }
-          );
-        }
-      );
-    });
-    socket.emit("serverip", url);
-    socket.on("NewProperties", (data) => {
-      let string = "";
-      Promise.all(
-        data.map((property) => {
-          string += `${property.name}=${property.value}\n`;
-        })
-      ).then((res) => {
-        fs.writeFile(
-          path.join(__dirname, "server.properties"),
-          string,
-          (err) => {
-            fs.readFile(
-              path.join(__dirname, "server.properties"),
-              "utf8",
-              (err, res) => {
-                dbx
-                  .filesUpload({
-                    path: "/server.properties",
-                    contents: res,
-                    mode: { ".tag": "overwrite" },
-                  })
-                  .then((res) => {
-                    console.log("updated properties");
-                  });
-              }
-            );
-          }
-        );
-      });
-    });
+    url = ngrok.GetUrl();
+    UpdateOnNewConnection(socket);
+    SendServerPropetiesToClient(socket);
+    UpdateServerPropertiesStorage(socket);
+
     socket.on("StartServer", async (data) => {
-      if (!isTheServerOn) {
-        url = await ngrok.connect({
-          proto: "tcp",
-          authtoken: "1cSMJNUrNTcgwynxtmpK3b3XNAu_7RAw7CfnKCSN7ZsEoVK8N",
-          addr: 25565,
-        });
-        socket.emit("serverip", url);
-        console.log(url);
+      if (state.CurrentState() === state.GetStates().stopped) {
         console.log("Initialazing");
-        dbx.filesDownload({ path: "/mcserver.jar" }).then((serverJar) => {
-          fs.writeFile(
-            path.join(__dirname, "mcserver.jar"),
-            serverJar.fileBinary,
-            () => {
-              dbx
-                .filesDownload({ path: "/world.zip" })
-                .then((worldFile) => {
-                  ExtractZipFile(worldFile);
-                })
-                .catch((err) => {
-                  console.log("No backup found, creating new world");
-                  ExecuteServerJar();
-                });
-            }
-          );
+        state.ChangeState(state.GetStates().starting);
+        socket.emit("serverStatus", state.CurrentState());
+        console.log(state.CurrentState());
+        Promise.all([
+          DownloadMinecraftJar(data.link),
+          DownloadMinecraftWorld().catch((err) => {console.log("World not found creating a new one"); StartServer(socket)}),
+        ]).then(async () => {
+          StartServer(socket);
         });
+      } else {
+        console.log("The server is already online or is starting");
       }
     });
+
     socket.on("StopServer", async (data) => {
-      if (isTheServerOn) {
-        await backupServer();
-        isTheServerOn = false;
-        console.log("Stopping server");
-        child.stdin.write("stop\n");
-      } else {
-        console.log("Server hasn't started");
-      }
+      StopServer();
     });
     socket.on("BackupServer", async (data) => {
-      if (isTheServerOn) {
-        console.log("Backing up server");
-        var zip = new Zip();
-        zip.addLocalFolder(path.join(__dirname, "server_data"));
-        dbx
-          .filesUpload({
-            path: "/world.zip",
-            contents: zip.toBuffer(),
-            mode: { ".tag": "overwrite" },
-          })
-          .then((res) => {
-            console.log("Backup Complete");
-          });
-      } else {
-        console.log("server has to be online to backup");
-      }
+      BackupServer();
     });
     socket.on("OpPlayer", (data) => {
-      console.log("Opping Player");
-      child.stdin.write(`op ${data.name}\n`);
+      if (state.CurrentState() === state.GetStates().started) {
+        console.log("Opping Player");
+        child.stdin.write(`op ${data.name}\n`);
+      } else {
+        console.log("The server has to be online to perform actions");
+      }
     });
     socket.on("SaveServer", (data) => {
-      console.log("Saving server");
-      child.stdin.write("save-all\n");
+      if (state.CurrentState() === state.GetStates().started) {
+        console.log("Saving server");
+        child.stdin.write("save-all\n");
+      } else {
+        console.log("The server has to be online to perform actions");
+      }
     });
     socket.on("CommandIssued", (data) => {
-      console.log("Issuing Command");
-      child.stdin.write(data.command + "\n");
+      if (state.CurrentState() === state.GetStates().started) {
+        console.log("Issuing Command");
+        child.stdin.write(data.command + "\n");
+      } else {
+        console.log("The server has to be online to perform actions");
+      }
     });
   });
 };
 
-const ExtractZipFile = (zipBinary) => {
-  console.log("Found Backup");
-  var zip = new Zip(zipBinary.fileBinary);
-  console.log("Extracting world");
-  zip.extractAllToAsync(path.join(__dirname, "server_data"), true, (err) => {
-    ExecuteServerJar();
-  });
-};
-
-const ExecuteServerJar = () => {
-  createServerConfig();
-  cron.schedule("*/5 * * * *", () => {
-    backupServer();
-    axios.get("https://mcserverdmj.herokuapp.com/").then((res) => {
-      console.log("Pinging each 5 minutes");
-    });
-  });
-  isTheServerOn = true;
+const ExecuteServerJar = async (AutoBackups, socket) => {
+  await createServerConfig();
   console.log("Starting Server");
   child = exec(
     "java -Xms512M -Xmx512M -jar " +
@@ -183,43 +123,192 @@ const ExecuteServerJar = () => {
     }
   );
   child.stdout.on("data", (data) => {
+    if (data.indexOf("Done") !== -1) {
+      console.log("Server has started, now joinable");
+      state.ChangeState(state.GetStates().started);
+      AutoBackups.Start();
+      socket.emit("serverStatus", state.CurrentState());
+    }
     console.log(data);
   });
   child.stderr.on("data", (data) => {
+    AutoBackups.Stop();
     console.log(data);
   });
 };
-const backupServer = async () => {
-  SaveServer();
-  setTimeout(() => {
-    console.log("Beginning server backup ");
-    var zip = new Zip();
-    zip.addLocalFolder(path.join(__dirname, "server_data"));
-    dbx
-      .filesUpload({
-        path: "/world.zip",
-        contents: zip.toBuffer(),
-        mode: { ".tag": "overwrite" },
-      })
+
+const StartServer = async (socket) => {
+  await ngrok.Start();
+  url = ngrok.GetUrl();
+  console.log(ngrok.GetUrl());
+  socket.emit("serverIp", url);
+  ExecuteServerJar(AutoBackups(), socket);
+};
+const StopServer = async () => {
+  if (state.CurrentState() === state.GetStates().started) {
+    state.ChangeState(state.GetStates().stopped);
+    AutoBackups.Stop();
+    socket.emit("serverStatus", state.CurrentState());
+    console.log("Stopping server");
+    await BackupServer();
+    child.stdin.write("stop\n");
+    url = "";
+    socket.emit("serverip", url);
+  } else {
+    console.log("Server hasn't started");
+  }
+};
+const BackupServer = async () => {
+  if (state.CurrentState() === state.GetStates().started) {
+    SaveServer();
+    setTimeout(() => {
+      console.log("Beginning server backup ");
+      var zip = new Zip();
+      zip.addLocalFolder(path.join(__dirname, "server_data"));
+      dbx
+        .filesUpload({
+          path: "/world.zip",
+          contents: zip.toBuffer(),
+          mode: { ".tag": "overwrite" },
+        })
+        .then((res) => {
+          console.log("Backup Complete");
+        });
+    }, 3000);
+  } else {
+    console.log("Server has to be online to backup");
+  }
+};
+
+const DownloadMinecraftJar = (linkToVersion) => {
+  return new Promise((resolve, reject) => {
+    let stream = fs.createWriteStream("server.jar");
+    axios
+      .get(linkToVersion)
       .then((res) => {
-        console.log("Backup Complete");
+        res.pipe(stream);
+        resolve();
+      })
+      .catch((err) => reject());
+  });
+};
+const DownloadMinecraftWorld = () => {
+  return dbx.filesDownload({ path: "/world.zip" }).then((worldFile) => {
+    var zip = new Zip(worldFile.fileBinary);
+    console.log("Extracting world");
+    zip.extractAllToAsync(
+      path.join(__dirname, "server_data"),
+      true,
+      (err) => {}
+    );
+  });
+};
+const AutoBackups = () => {
+  let job;
+  return {
+    Start: () => {
+      job = cron.schedule("*/5 * * * *", () => {
+        BackupServer();
+        axios.get("https://mcserverdmj.herokuapp.com/").then((res) => {
+          console.log("Pinging each 5 minutes");
+        });
       });
-  }, 3000);
+    },
+    Stop: () => {
+      job.stop();
+    },
+  };
 };
 const SaveServer = () => {
   console.log("Saving server");
   child.stdin.write("save-all\n");
 };
 const createServerConfig = () => {
-  fs.writeFile(path.join(__dirname, "server_data"), "eula=true", (err) => {});
-  dbx.filesDownload({ path: "/server.properties" }).then((data) => {
+  return new Promise((resolve, reject) => {
+    fs.writeFile(
+      path.join(__dirname, "server_data", "eula.txt"),
+      "eula=true",
+      (err) => {}
+    );
+    dbx
+      .filesDownload({ path: "/server.properties" })
+      .then((data) => {
+        fs.writeFile(
+          path.join(__dirname, "server_data", "server.properties"),
+          data.fileBinary,
+          () => {
+            resolve();
+          }
+        );
+      })
+      .catch((err) => reject());
+  });
+};
+const SendServerPropetiesToClient = (socket) => {
+  dbx.filesDownload({ path: "/server.properties" }).then((properties) => {
     fs.writeFile(
       path.join(__dirname, "server_data", "server.properties"),
-      data.fileBinary,
-      () => {}
+      properties.fileBinary,
+      (err) => {
+        fs.readFile(
+          path.join(__dirname, "server_data", "server.properties"),
+          "utf8",
+          (err, data) => {
+            let listOfProperties = [];
+            let tmp = data.split("\n");
+            tmp.forEach((res) => {
+              let property = res.split("=");
+              listOfProperties.push({
+                property: property[0],
+                value: property[1],
+              });
+            });
+            socket.emit("downloaded-properties", listOfProperties);
+          }
+        );
+      }
     );
   });
 };
+const UpdateServerPropertiesStorage = (socket) => {
+  socket.on("NewProperties", (data) => {
+    let newProperties = "";
+    Promise.all(
+      data.map((property) => {
+        newProperties += `${property.name}=${property.value}\n`;
+      })
+    ).then((res) => {
+      fs.writeFile(
+        path.join(__dirname, "server.properties"),
+        newProperties,
+        (err) => {
+          fs.readFile(
+            path.join(__dirname, "server.properties"),
+            "utf8",
+            (err, res) => {
+              dbx
+                .filesUpload({
+                  path: "/server.properties",
+                  contents: res,
+                  mode: { ".tag": "overwrite" },
+                })
+                .then((res) => {
+                  console.log("updated properties");
+                });
+            }
+          );
+        }
+      );
+    });
+  });
+};
+const UpdateOnNewConnection = (socket) => {
+  socket.emit("serverStatus", state.CurrentState());
+  if (url !== "") {
+    socket.emit("serverIp", url);
+  }
+};
+
 socketIoHandler();
 
 server.listen(PORT, () => console.log("SERVER RUNNING ON PORT : " + PORT));
